@@ -1,0 +1,128 @@
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+library(gt)
+library(baseballr)
+library(tidyverse)
+library(dplyr)
+library(plotly)
+
+statcastleaders <- baseballr::statcast_leaderboards(player_type = "Null")
+pitch_lead <- baseballr::fg_pitch_leaders(2021,2022)
+batter_lead <- baseballr::fg_batter_leaders(2022,2022)
+statcastbatting <- baseballr::scrape_statcast_savant_batter(
+  start_date = Sys.Date() - 1,
+  end_date = Sys.Date())
+```
+
+```{r}
+ADExample <- batter_lead %>%
+  filter(Name=="Andres Gimenez")
+
+ADExample %>% 
+  select(Season,Name,Team,G,AB,H,HR,RBI,SO,AVG,SLG,OPS,ISO,BABIP,wRC_plus,WAR)%>% 
+gt()
+```
+
+```{r Offensive Comp}
+AD <- batter_lead %>%
+  filter(OPS >= .835,SLG >= .466, BABIP >= .353, ISO >= .169) %>% 
+  select(Name,OPS,SLG,BABIP,SLG, ISO,wRC_plus) %>% 
+  arrange(desc(BABIP))
+
+AD %>% 
+  gt() %>% 
+  gt_theme_538() %>% 
+  tab_header(title = "Andres Gimenez Offensive Comp. 2022") %>% 
+  gt_color_rows(OPS:ISO) %>% 
+  gt_highlight_rows(
+    rows = 4, 
+    fill = "green",
+    bold_target_only = TRUE,
+    target_col = Name
+    )
+```
+
+```{r ISO}
+
+ADISO <-batter_lead %>% 
+  select(Name,OPS,SLG,ISO,wRC_plus) %>% 
+  filter(OPS>=.837,SLG>=.466,ISO>=.169) %>% 
+  arrange(desc(ISO))
+
+ADISO %>% 
+  gt() %>% 
+  gt_theme_538() %>% 
+  tab_header(title = "Andres Gimenez Offensive Comp.ISO 2022") %>% 
+  gt_color_rows(OPS:ISO) %>% 
+  gt_highlight_rows(
+    rows = 16, 
+    fill = "green",
+    bold_target_only = TRUE,
+    target_col = Name
+  ) 
+```
+
+```{r OPS}
+ADOPS <-batter_lead %>% 
+  select(Name,OPS,SLG,ISO) %>% 
+  filter(OPS>=.837,SLG>=.466,ISO>=.169) %>% 
+  arrange(desc(OPS))
+
+ADOPS %>% 
+  gt() %>% 
+  gt_theme_538() %>% 
+  tab_header(title = "Andres Gimenez Offensive Comp.OPS 2022") %>% 
+  gt_color_rows(OPS:ISO) %>% 
+  gt_highlight_rows(
+    rows = 16, 
+    fill = "green",
+    bold_target_only = TRUE,
+    target_col = Name
+  )
+```
+
+```{r SLG}
+ADSLG <-batter_lead %>% 
+  select(Name,OPS,SLG,ISO) %>% 
+  filter(OPS>=.837,SLG>=.466,ISO>=.169) %>% 
+  arrange(desc(SLG))
+
+ADSLG %>% 
+  gt() %>% 
+  gt_theme_538() %>% 
+  tab_header(title = "Andres Gimenez Offensive Comp.SLG 2022") %>% 
+  gt_color_rows(OPS:ISO) %>% 
+  gt_highlight_rows(
+    rows = 16, 
+    fill = "green",
+    bold_target_only = TRUE,
+    target_col = Name
+    )
+```
+```{r OAA}
+OAA <-read.csv(file = "outs_above_average.csv")
+
+ADOAA <-OAA %>%
+  select(last_name,first_name,fielding_runs_prevented,outs_above_average,primary_pos_formatted)
+ADOAA %>%
+  ggplot(aes(x=fielding_runs_prevented,y=outs_above_average,color=primary_pos_formatted))+
+  geom_boxplot()+
+  labs(x="Fielding Runs Prevented",
+       y="OAA",
+       color="Position",
+       title= "Fielding Runs Prevented vs. OAA at Each Position")
+
+
+
