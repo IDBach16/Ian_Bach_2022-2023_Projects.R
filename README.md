@@ -1,2 +1,3 @@
 # Ian_Bach_2022_-Offseason
-Utilizing Fangraphs to create analyzation of andres gimenez
+2022 Off Season Projects
+1). Analyzation of Andres Gimenez
