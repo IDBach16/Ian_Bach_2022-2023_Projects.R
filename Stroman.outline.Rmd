@@ -1,0 +1,425 @@
+---
+title: "Marcus Stroman 2023 Analysis"
+author: "Ian Bach"
+date: 
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/ibach/Ian Bach Dropbox/Ian Bach")
+stroman_data <- read.csv("stroman_data.csv")
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(grid)
+library(gridExtra)
+library(gt)
+```
+
+### Overview
+
+1). Pitch Distribution: A breakdown of the types of pitches thrown by Stroman.
+
+
+2). Outcomes by Pitch: A breakdown of result "except triple" for each pitch.
+
+
+3). Average Release Speed: The average speed of his pitches by pitch type.
+
+
+4). Game-by-Game Performance: Number of pitches thrown and average speed in each game.
+
+
+5). Outcome Distribution: How frequently each outcome (e.g., strike, ball, hit, out) occurred.
+
+
+6). Spin Axis: Average spin axis by pitch type, which can indicate the type of movement on his pitches.
+
+
+7). Average Launch Angle Per Outcome: Average launch angle per event of the batter
+
+
+8). Pitch Count and Pitch Type Variance by Inning: Inning by inning variances
+
+9). Closing 
+
+### Pitch Distribution
+
+Stroman frequently throws the "SI" (Sinker) pitch, which comprises a significant portion of his pitch repertoire.
+
+The "FC" (Cutter) and "SL" (Slider) pitches are also commonly used by Stroman.
+
+He uses the "CU" (Curveball) and "CH" (Changeup) pitches less frequently.
+
+
+```{r pitch type distribution}
+pitch_counts <- table(stroman_data$pitch_type)
+pitch_percentage <- as.data.frame((pitch_counts / sum(pitch_counts)) * 100)
+colnames(pitch_percentage) <- c('Pitch_Type', 'Percentage')
+
+ggplot(pitch_percentage, aes(x = Pitch_Type, y = Percentage)) +
+  geom_bar(stat = 'identity', fill = 'seagreen', color = 'black', alpha = 0.7) +
+  coord_flip() +
+  labs(title = 'Pitch Type Distribution', x = 'Pitch Type', y = 'Percentage (%)') +
+  geom_text(aes(label = sprintf('%.2f%%', Percentage)), hjust = 1.2, size = 3.5) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_line(linetype = 'dashed', color = 'grey50'))
+
+```
+
+```{r outcomes by pitch}
+# Filtering relevant outcomes
+desired_outcomes <- c('single', 'double', 'triple', 'home_run', 'strikeout', 'walk', 'field_out')
+filtered_data <- stroman_data %>% filter(events %in% desired_outcomes)
+
+# Grouping by pitch type and event to get the count of each outcome for each pitch type
+outcome_counts <- filtered_data %>% group_by(pitch_type, events) %>% summarise(count = n()) %>% spread(events, count, fill = 0)
+
+# GT table of outcomes below
+outcome_counts %>%
+  gt() %>%
+  tab_header(
+    title = "Outcomes by Pitch Type"
+  ) %>%
+  cols_label(
+    pitch_type = "Pitch Type"
+  ) %>%
+  fmt_number(
+    columns = vars(single, double, home_run, strikeout, walk, field_out),
+    decimals = 0
+  ) %>%
+  tab_options(
+    table.width = px(750)
+  )
+
+```
+
+
+
+```{r outcomes by pitch vis}
+
+# Plotting the outcomes for each pitch type
+ggplot(outcome_counts, aes(x = pitch_type)) +
+  geom_bar(aes(y = single), stat = 'identity', fill = 'blue', position = 'stack') +
+  geom_bar(aes(y = double), stat = 'identity', fill = 'red', position = 'stack') +
+  geom_bar(aes(y = field_out), stat = 'identity', fill = 'green', position = 'stack') +
+  geom_bar(aes(y = strikeout), stat = 'identity', fill = 'orange', position = 'stack') +
+  geom_bar(aes(y = walk), stat = 'identity', fill = 'purple', position = 'stack') +
+  labs(title = 'Outcomes by Pitch Type', x = 'Pitch Type', y = 'Number of Pitches') +
+  theme_minimal()
+```
+
+```{r box plot speed}
+p <- ggplot(stroman_data, aes(x=pitch_type, y=release_speed, fill=pitch_type)) +
+  geom_boxplot() +
+  labs(title='Release Speed Distribution by Pitch Type for Stroman, Marcus',
+       x='Pitch Type',
+       y='Release Speed (mph)') +
+  theme_minimal() +
+  scale_fill_brewer(palette='Set1') +
+  scale_y_continuous(limits=c(80, 100), breaks=seq(80, 100, by=1))
+
+print(p)
+```
+
+
+```{r pitch trends over time for marcus stroman}
+pitch_trends <- stroman_data %>% 
+  group_by(game_date, pitch_type) %>% 
+  tally() 
+
+ggplot(pitch_trends, aes(x = game_date, y = n, color = pitch_type)) + 
+  geom_line(aes(group = pitch_type)) + 
+  labs(title = 'Pitch Trends Over Time for Marcus Stroman', x = 'Game Date', y = 'Number of Pitches') + 
+  theme_minimal() + 
+  theme(legend.position = 'bottom', axis.text.x = element_text(angle = 60, hjust = 1)) + 
+  scale_y_continuous(sec.axis = sec_axis(~., breaks = NULL)) + 
+  theme(legend.position = 'bottom', axis.text.x=element_text(angle=60, hjust=1))
+```
+
+
+```{r pitch trends gt}
+pitch_trendsgt <- stroman_data %>% 
+  group_by(game_date, pitch_type) %>% 
+  tally() %>% 
+  spread(key = pitch_type, value = n, fill = 0)
+
+# GT table of outcomes below
+pitch_trendsgt %>%
+  gt() %>%
+  tab_header(
+    title = "Pitch Trends"
+  ) %>%
+  cols_label(
+    game_date = "Game Date",
+    FC = "FC",
+    FF = "FF",
+    FS = "FS",
+    SI = "SI",
+    SL = "SL",
+    SV = "SV"
+  ) %>%
+  fmt_number(
+    columns = vars(FC, FF, FS, SI, SL, SV),
+    decimals = 0
+  ) %>%
+  tab_options(
+    table.width = px(750)
+  )
+```
+
+#### Pitch Types 
+SV (Splitter): A tight cluster indicates a relatively consistent spin axis and spin rate.
+
+SI (Sinker): Observations are spread out more, but there's still a discernible cluster.
+
+FC (Cutter): A tight cluster indicates a fairly consistent spin axis and spin rate.
+
+FS (Split-Finger Fastball): Observations are more spread out, suggesting variability in how this pitch is thrown.
+
+SL (Slider): A tight cluster suggests consistency in spin axis and spin rate for this pitch.
+
+FF (Four-Seam Fastball): Observations are spread out, indicating variability in the spin axis and spin rate.
+
+
+
+### Spin Axis:
+Spin axis refers to the angle, in degrees, at which a baseball rotates as it travels from the pitcher's hand to the plate. Think of the baseball as a globe; the spin axis is like the Earth's axis, tilted at an angle. The spin axis determines the direction of the Magnus force, which in turn affects how the baseball moves.
+
+- **0° (or 360°)**: Represents backspin. A pitch with pure backspin (like a well-thrown four-seam fastball) will resist the force of gravity slightly and will appear to "rise" to the batter, even though it doesn't actually move upward.
+
+- **90°**: Represents side spin to the pitcher's glove side. For a right-handed pitcher, this would result in movement to the left from the pitcher's perspective.
+
+- **180°**: Represents pure topspin. Pitches with topspin will drop more than a ball thrown without spin.
+
+- **270°**: Represents side spin to the pitcher's arm side. For a right-handed pitcher, this would result in movement to the right from the pitcher's perspective.
+
+### Interpreting Spin Axis from the Charts:
+- **Tight Clusters**: If you observe a tight cluster around a particular spin axis, it suggests that the pitcher consistently releases that pitch type with a similar spin axis. This means the movement of that pitch type will be relatively predictable.
+
+- **Spread-out Points**: A spread in the points indicates variability in the spin axis for that pitch type. This means the pitch may move differently from one throw to the next, making it potentially more unpredictable for batters but also possibly harder for the pitcher to control.
+  
+For instance, in the charts:
+- The **SV (Splitter)** shows a tight cluster around 60°. This indicates that when the pitcher throws a splitter, it generally has a spin axis close to 60°, leading to a consistent movement pattern.
+
+- The **SI (Sinker)** has points spread between roughly 200° to 240°, indicating variability in the movement of the sinker based on its spin axis.
+
+Understanding the spin axis of pitches can help batters anticipate pitch movement, and it can help pitchers refine their technique to achieve desired pitch behavior.
+
+
+```{r spin axis vs spin rate}
+unique_pitch_types <- unique(stroman_data$pitch_type)
+unique_pitch_types
+
+
+# Plot scatter plots for each pitch type
+for(pitch in unique_pitch_types) {
+  data <- subset(stroman_data, pitch_type == pitch)
+  p <- ggplot(data, aes(x=spin_axis, y=release_spin_rate, color=pitch_type)) +
+    geom_point(alpha=0.5) +
+    labs(title=paste('Spin Axis vs Spin Rate for', pitch), x='Spin Axis (degrees)', y='Spin Rate (rpm)') +
+    scale_color_brewer(palette='Set1') +
+    theme_minimal()
+  print(p)
+}
+
+```
+Sac Fly:
+Average Launch Angle: 47°
+Explanation: Sac fly, short for "sacrifice fly", typically aims to allow a runner to score. The high launch angle suggests that the ball is hit with an upward trajectory, making it difficult for fielders to catch quickly, thereby allowing runners to advance or score.
+
+Home Run:
+Average Launch Angle: 26.875°
+Explanation: As expected, home runs have a positive launch angle, indicating the ball is hit with an upward trajectory for maximum distance, resulting in the ball going out of the playing field.
+
+Double Play:
+Average Launch Angle: 24.5°
+Explanation: A surprising finding as one might expect a lower angle for ground balls leading to double plays. This suggests that the double plays in the dataset might involve line drives or pop-ups that are caught and followed by a quick out of another runner.
+
+Double:
+Average Launch Angle: 14.27°
+Explanation: Doubles often result from hits that are neither too high nor too low, allowing the ball to land between outfielders and roll for some distance.
+
+Single:
+Average Launch Angle: 7.8°
+Explanation: Singles usually result from a variety of hit types, but the positive launch angle suggests a mix of line drives and ground balls that don't get caught.
+
+Field Out:
+Average Launch Angle: 0.78°
+Explanation: This close-to-zero angle suggests that outs are made from a variety of hit types, including line drives, fly balls, 
+and ground balls.
+
+Field Error:
+Average Launch Angle: 0°
+Explanation: This indicates that errors made by fielders happen across a variety of hit types, as the average launch angle is neutral.
+
+Grounded into Double Play:
+Average Launch Angle: -10.06°
+Explanation: A negative launch angle indicates that these are predominantly ground balls, which makes sense as grounders often lead to double plays.
+
+Force Out:
+Average Launch Angle: -21.43°
+Explanation: The negative launch angle suggests that force outs predominantly result from ground balls.
+
+Fielder's Choice:
+Average Launch Angle: -36°
+Explanation: A highly negative launch angle, indicating the ball is hit sharply downwards, typically resulting in ground balls where a fielder chooses to make an out on a runner other than the batter.
+
+
+```{r}
+avg_launch_angle_by_event <- aggregate(stroman_data$launch_angle, by=list(stroman_data$events), FUN=mean)
+colnames(avg_launch_angle_by_event) <- c('events', 'avg_launch_angle')
+
+ggplot(avg_launch_angle_by_event, aes(x=events, y=avg_launch_angle, fill=events)) + 
+  geom_bar(stat='identity') + 
+  labs(title='Average Launch Angle by Event', x='Event', y='Average Launch Angle') +
+  theme(axis.text.x=element_text(angle=60, hjust=1), legend.title=element_blank()) +
+  scale_y_continuous(limits=c(-50, 50), breaks=seq(-50, 50, by=10))
+```
+
+
+```{r}
+avg_launch_angle_by_event %>%
+  gt() %>%
+  tab_header(
+    title = "Average Launch Angle by Event"
+  ) %>%
+  cols_label(
+    events = "Event",
+    avg_launch_angle = "Average Launch Angle"
+  )
+
+```
+
+
+```{r}
+library(gt)
+
+# Create a stylized table
+avg_launch_angle_by_event %>%
+  gt() %>%
+  tab_header(
+    title = "Average Launch Angle by Event",
+    subtitle = "Data aggregated from stroman_data"
+  ) %>%
+  cols_label(
+    events = "Event",
+    avg_launch_angle = "Average Launch Angle"
+  ) %>%
+  fmt_number(
+    columns = vars(avg_launch_angle),
+    decimals = 2
+  ) %>%
+  tab_options(
+    table.width = px(600),
+    table.font.size = px(12),
+    table.border.top.style = "solid",
+    table.border.top.width = px(2),
+    table.border.bottom.style = "solid",
+    table.border.bottom.width = px(2)
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#F5F5F5"),
+    locations = cells_body(columns = vars(avg_launch_angle), rows = TRUE)
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#E0E0E0"),
+    locations = cells_column_labels(columns = vars(avg_launch_angle))
+  )
+
+```
+
+#### Pitch Count and Pitch Type Variance by Inning
+
+Marcus Stroman is renowned for his ability to accumulate innings in his professional career. An examination of his average pitch count per inning reveals a pattern where Stroman tends to pitch deeper into games. The chart clearly illustrates that Stroman tends to throw a higher average number of pitches in his first two innings compared to the fourth and fifth innings. This suggests that opponents may strategize to target Stroman early in the game rather than in the middle innings when he has settled into his rhythm.
+
+One particularly intriguing observation from this analysis is Stroman's pitch selection, which predominantly features sinker pitches. What stands out is his performance in the sixth inning. In 2023, he notably decreased his reliance on sinker pitches during this inning, opting for more SV pitches. This shift could signify his adaptability and willingness to extend his outings deep into games. These charts underscore Stroman's adeptness at diversifying his pitch repertoire, highlighting his true pitching versatility.
+
+```{r}
+pitch_count_by_inning1 <- stroman_data %>%
+  group_by(game_date, inning, pitch_type) %>%
+  summarise(game_date, inning, pitch_count = n()) %>%
+  ungroup()
+
+pitch_count_stats_by_inning2 <- pitch_count_by_inning1 %>%
+  group_by(inning) %>%
+  summarise(mean_pitch_count = mean(pitch_count),
+            median_pitch_count = median(pitch_count),
+            min_pitch_count = min(pitch_count),
+            max_pitch_count = max(pitch_count),
+            sd_pitch_count = sd(pitch_count)) %>%
+  ungroup()
+
+
+
+# Create a bar plot for mean pitch count by inning
+bar_plot_graph <- ggplot(pitch_count_stats_by_inning2, aes(x = as.factor(inning), y = mean_pitch_count)) +
+  geom_bar(stat = 'identity', aes(fill = as.factor(inning))) +
+  geom_errorbar(aes(ymin = mean_pitch_count - sd_pitch_count, ymax = mean_pitch_count + sd_pitch_count), width = 0.2) +
+  labs(title = 'Mean Pitch Count by Inning with Error Bars',
+       x = 'Inning',
+       y = 'Mean Pitch Count') +
+  theme_minimal()
+
+# Show the bar plot
+print(bar_plot_graph)
+
+```
+
+```{r}
+pitch_count_by_inning12 <- stroman_data %>%
+  group_by(game_date, inning, pitch_type) %>%
+  summarise(pitch_count = n(), .groups = 'drop') %>%
+  ungroup()
+
+pitch_count_stats_by_pitch_type <- pitch_count_by_inning1 %>%
+  group_by(inning, pitch_type) %>%
+  summarise(mean_pitch_count = mean(pitch_count)) %>%
+  ungroup()
+
+# Create a bar plot for mean pitch count by pitch type and inning
+bar_plot_graph <- ggplot(pitch_count_stats_by_pitch_type, aes(x = as.factor(inning), y = mean_pitch_count, fill = pitch_type)) +
+  geom_bar(stat = 'identity') +
+  labs(title = 'Mean Pitch Count by Pitch Type and Inning',
+       x = 'Inning',
+       y = 'Mean Pitch Count') +
+  theme_minimal() +
+  scale_fill_brewer(palette = 'Set1')
+
+# Show the bar plot
+print(bar_plot_graph)
+
+```
+
+
+
+
+
+
+
+## Closing
+
+Arsenal Diversity:
+
+Stroman demonstrates a strong reliance on Sinker (SI) and Slider (SV) pitches, constituting approximately 70% of the total pitch types. While effective, this two-pitch focus could become a limitation over time as batters adjust. Expanding the repertoire could offer strategic advantages.
+
+Velocity Profiling:
+
+Stroman's average release speed of 89.1 mph, with a peak at 94.2 mph, places him in the high-80s to low-90s mph range.
+
+Spin Rate Dynamics:
+
+An above-average spin rate (mean: 2423 RPM) suggests an ability to induce more swings and misses or weak contact. The variety in spin rate, as indicated by a standard deviation of 305 RPM, adds to the pitcher's deception capabilities.
+
+Key Performance Metrics:
+
+With 117 strikeouts, Stroman exhibits strong dominance over batters. However, 52 walks indicate a control issue that needs addressing. High strikeouts coupled with walks could indicate a "high-risk, high-reward" pitching style, effective but potentially costly.
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
