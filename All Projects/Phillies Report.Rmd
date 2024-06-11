@@ -1,0 +1,244 @@
+---
+title: "Scouting Report - Aaron Nola"
+author: "Ian Bach"
+date: "2024-06-06"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(plyr)
+library(tidyverse)
+library(stringr)
+library(baseballr)
+library(emojifont)
+library(janitor)
+library(tidyr)
+library(ggplot2)
+library(tools)
+library(pandoc)
+library(readr)
+library(rmarkdown)
+
+# Set working directory
+setwd("C:/Users/ibach/OneDrive - Terillium/Desktop/Purdue MSBA/Phillies Quiz")
+
+# Read the CSV files
+yak_23 <- read_csv("sample_game.csv")
+
+# Set a factor to manually order the pitch types
+yak_23$pitch_Type <- factor(yak_23$pitch_type, levels = c("Fastball", "Sinker", "Cutter", "Curveball", "Slider", "Changeup", "Splitter", "Knuckleball", "Other"))
+
+pitcher_data <- yak_23
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+knitr::include_graphics("AN.png")
+#knitr::include_graphics("AN_resized.png")
+library(magick)
+
+# Load and display the image
+img <- image_read("AN.png")
+img <- image_resize(img, "800x600")  # Resize for better display
+image_write(img, "AN_resized.png")
+
+```
+
+
+
+```{r Game Summary Table, echo=FALSE, warning=FALSE}
+game_summary_table <- 
+  yak_23 %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  group_by(Pitch = pitch_type) %>%
+  dplyr::summarize(No. = n(),
+                   Usage = n(),
+                   `Usage %` = n(),
+                   Velo = round(mean(release_velo, na.rm = TRUE), 1),
+                   VeloMax = round(max(release_velo, na.rm = TRUE), 1),
+                   Spin = round(mean(spin_rate, na.rm = TRUE), 0),
+                   Vert = round(mean(break_z, na.rm = TRUE), 1),
+                   Horz = round(mean(break_x, na.rm = TRUE), 1),
+                   RelHt = round(mean(release_z, na.rm = TRUE), 1),
+                   RelSide = round(mean(release_x, na.rm = TRUE), 1),
+                   Ext = round(mean(extension, na.rm = TRUE), 1)) %>%
+  mutate(`Usage %` = round(`Usage %` / sum(`Usage %`), 3) * 100) %>%
+  dplyr::select(-Usage)
+
+kable(game_summary_table, caption = "Game Summary Table")
+
+
+```
+
+```{r Pitch Usage Table, echo=FALSE, warning=FALSE}
+pitch_usage_table <- pitcher_data %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  group_by(Pitch = pitch_type) %>%
+  dplyr::summarize(No. = n(),
+                   Use = n(),
+                   `2K` = sum(strikes == 2, na.rm = TRUE),
+                   `2K%` = sum(`2K`, na.rm = TRUE),
+                   `Strk%` = round(sum(description %in% c("swinging_strike", "foul", "hit_into_play", "called_strike"), na.rm = TRUE) / n(), 3) * 100,
+                   `Whiff%` = round(sum(description %in% c("swinging_strike"), na.rm = TRUE) / 
+                                      sum(description %in% c("swinging_strike", "foul", "hit_into_play"), na.rm = TRUE), 3) * 100)
+
+kable(pitch_usage_table, caption = "Pitch Usage Table")
+
+```
+
+
+```{r Game Stats, echo=FALSE,message=FALSE, warning=FALSE}
+game_stats <- pitcher_data %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  summarise(BF = n_distinct(inning, batter_name_full),
+            K = n_distinct(events == "strikeout"),
+            BIP = n_distinct(description == 'grounded_into_double_play'),
+            H = n_distinct(description %in% c('single', 'double', 'triple', 'fieldout')),
+            XBH = n_distinct(description %in% c('double', 'triple')))
+
+kable(game_stats, caption = "Game Stats")
+
+```
+
+```{r Usage vs RHH, echo=FALSE, message=FALSE, warning=FALSE}
+usage_r <- pitcher_data %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  filter(bats == 'R') %>%
+  group_by(Pitch = pitch_type) %>%
+  dplyr::summarize(No. = n(),
+                   `Usage %` = n(),
+                   `2K` = sum(strikes == 2),
+                   `2K%` = sum(`2K`),
+                   `Strike %` = round(sum(description %in% c("swinging_strike", "foul", "foulTip", "hit_into_play", "called_strike")) / n(), 3) * 100,
+                   `Whiff %` = round(sum(description %in% c("swinging_strike")) /
+                                       sum(description %in% c("swinging_strike", "foul", "foulTip", "hit_into_play")), 3) * 100) %>%
+  mutate(`Usage %` = round(`Usage %` / sum(`Usage %`), 3) * 100)
+
+kable(usage_r, caption = "Usage vs RHH")
+
+```
+
+```{r Stats vs RHH, echo=FALSE, message=FALSE, warning=FALSE}
+stats_vs_r <- pitcher_data %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  summarise(BF = n_distinct(inning, batter_name_full),
+            K = n_distinct(events == "strikeout"),
+            BIP = n_distinct(description == 'grounded_into_double_play'),
+            H = n_distinct(events %in% c('single', 'double', 'triple', 'fieldout')),
+            XBH = n_distinct(events %in% c('double', 'triple')))
+
+kable(stats_vs_r, caption = "Stats vs RHH")
+
+```
+
+```{r Usage vs LHH, echo=FALSE, message=FALSE, warning=FALSE}
+usage_l <- pitcher_data %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  filter(bats == 'L') %>%
+  group_by(Pitch = pitch_type) %>%
+  dplyr::summarize(No. = n(),
+                   `Usage %` = n(),
+                   `2K` = sum(strikes == 2),
+                   `2K%` = sum(`2K`),
+                   `Strike %` = round(sum(description %in% c("swinging_strike", "foul", "hit_into_play", "called_strike")) / n(), 3) * 100,
+                   `Whiff %` = round(sum(description %in% c("swinging_strike")) /
+                                       sum(description %in% c("swinging_strike", "foul", "hit_into_play")), 3) * 100) %>%
+  mutate(`Usage %` = round(`Usage %` / sum(`Usage %`), 3) * 100)
+
+kable(usage_l, caption = "Usage vs LHH")
+
+```
+
+```{r Stats vs LHH, echo=FALSE, message=FALSE, warning=FALSE}
+stats_vs_l <- pitcher_data %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  filter(bats == 'L') %>%
+  dplyr::summarise(BF = n_distinct(inning, batter_name_full),
+                   K = n_distinct(events == "strikeout"),
+                   BIP = n_distinct(description == 'grounded_into_double_play'),
+                   H = n_distinct(events %in% c('single', 'double', 'triple')),
+                   `1B` = n_distinct(events == 'single'),
+                   `2B` = n_distinct(events == 'double'),
+                   `3B` = n_distinct(events == 'triple'))
+
+kable(stats_vs_l, caption = "Stats vs LHH")
+
+```
+
+```{r Batted Ball Data, echo=FALSE, message=FALSE, warning=FALSE}
+batted_ball <- pitcher_data %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT')) %>%
+  group_by(Pitch = pitch_type) %>%
+  dplyr::summarize(No. = n(),
+                   BIP = sum(description == 'hit_into_play'))
+
+kable(batted_ball)
+
+```
+
+```{r Pitch Movement Plot, echo=FALSE, message=FALSE, warning=FALSE}
+pitch_movement_plot <- 
+  ggplot(data = pitcher_data %>%
+           dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                             Cutter = 'CT', Changeup = 'CH', Other = 'OT')),
+         aes(x = break_x, y = break_z, color = pitch_type)) +
+  labs(title = "Pitch Movement", color = "", x = "Horizontal Break (in.)", y = "Vertical Break (in.)") +
+  xlim(-22, 22) + ylim(-22, 22) +
+  geom_segment(aes(x = 0, y = -22, xend = 0, yend = 22), size = 1, color = "grey55") +
+  geom_segment(aes(x = -22, y = 0, xend = 22, yend = 0), size = 1, color = "grey55") +
+  geom_point(size = 4, alpha = .75) +
+  scale_color_manual(values = c('FB' = 'red', 'CB' = 'darkgreen', 'SI' = '#f47b20', 'SL' = 'cornflowerblue',
+                                'CT' = 'gold', 'CH' = 'violet', 'OT' = 'black')) +  
+  theme_bw() + theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5)) +
+  theme(legend.position = "none", legend.text = element_text(size = 8), axis.title = element_text(size = 8))
+
+print(pitch_movement_plot)
+
+```
+
+```{r Pitch Velocity Plot, echo=FALSE, message=FALSE, warning=FALSE}
+pvp_game <- pitcher_data %>%
+  group_by(pitcher, pitch_type, inning) %>%
+  summarise(Avg = mean(release_velo, na.rm = TRUE), Max = max(release_velo, na.rm = T), Min = min(release_velo, na.rm = T)) %>%
+  arrange(inning, desc(Max)) %>%
+  dplyr::mutate(pitch_type = recode(pitch_type, Fastball = "FB", Curveball = 'CB', Sinker = 'SI', Slider = 'SL',
+                                    Cutter = 'CT', Changeup = 'CH', Other = 'OT', Knuckleball = 'KN'))
+
+pvp_game_plot <- if (length(unique(pvp_game$inning)) > 1) {
+  ggplot(data = pvp_game, aes(x = inning, y = Avg, color = pitch_type)) +
+    geom_point(size = 2, alpha = .75) +
+    geom_line() +
+    scale_x_continuous(labels = as.numeric(pvp_game$inning), breaks = pvp_game$inning) +
+    scale_color_manual(values = c('FB' = 'red', 'CB' = 'darkgreen', 'SI' = '#f47b20', 'SL' = 'cornflowerblue',
+                                  'CT' = 'gold', 'CH' = 'violet', 'OT' = 'black', 'SPL' = 'black', 'KN' = 'black')) +
+    labs(title = "Velo by inning", x = "inning", y = "Pitch Velocity (MPH)", color = " ") +
+    theme_bw() + theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5), axis.text = element_text(size = 8)) +
+    theme(legend.position = "none", legend.text = element_text(size = 8), axis.title = element_text(size = 8))
+} else {
+  ggplot(data = pvp_game, aes(x = inning, y = Avg, color = pitch_type)) +
+    geom_point(size = 2, alpha = .75) +
+    scale_x_continuous(labels = as.numeric(pvp_game$inning), breaks = pvp_game$inning) +
+    scale_color_manual(values = c('FB' = 'red', 'CB' = 'darkgreen', 'SI' = '#f47b20', 'SL' = 'cornflowerblue',
+                                  'CT' = 'gold', 'CH' = 'violet', 'OT' = 'black', 'SPL' = 'black', 'KN' = 'black')) +
+    labs(title = "Velo by inning", x = "inning", y = "Pitch Velocity (MPH)", color = " ") +
+    theme_bw() + theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5), axis.text = element_text(size = 8)) +
+    theme(legend.position = "none", legend.text = element_text(size = 8), axis.title = element_text(size = 8))
+}
+
+print(pvp_game_plot)
+
+```
+
+
+
